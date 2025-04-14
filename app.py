@@ -1,79 +1,91 @@
 from flask import Flask, request, render_template_string
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+import time
 
 app = Flask(__name__)
 
-html_content = """<!DOCTYPE html>
-<html lang=\"en\">
+HTML_TEMPLATE = '''
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset=\"UTF-8\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-    <title>WhatsApp Automation</title>
-    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js\"></script>
+    <meta charset="UTF-8">
+    <title>Messenger Bot</title>
 </head>
 <body>
-    <h2>WhatsApp Automation</h2>
-    
-    <label for=\"deviceNumber\">WhatsApp Number:</label>
-    <input type=\"text\" id=\"deviceNumber\" placeholder=\"Enter your WhatsApp number\"><br>
-    
-    <label for=\"targetNumber\">Target Number/Thread ID:</label>
-    <input type=\"text\" id=\"targetNumber\" placeholder=\"Enter target number or thread ID\"><br>
-    
-    <label for=\"message\">Message:</label>
-    <textarea id=\"message\" placeholder=\"Enter your message\"></textarea><br>
-    
-    <label for=\"speed\">Speed (seconds):</label>
-    <input type=\"number\" id=\"speed\" min=\"1\" value=\"5\"><br>
-    
-    <label for=\"fileInput\">Upload TXT File:</label>
-    <input type=\"file\" id=\"fileInput\" accept=\".txt\"><br>
-    
-    <label for=\"mentionName\">Mention Name:</label>
-    <input type=\"text\" id=\"mentionName\" placeholder=\"Enter name to mention\"><br>
-    
-    <button onclick=\"generateQRCode()\">Generate QR Code</button>
-    <div id=\"qrcode\"></div>
-    
-    <button onclick=\"sendMessage()\">Send Message</button>
-    
-    <script>
-        function generateQRCode() {
-            let number = document.getElementById('deviceNumber').value;
-            if (number) {
-                document.getElementById('qrcode').innerHTML = '';
-                new QRCode(document.getElementById(\"qrcode\"), `https://wa.me/${number}`);
-            } else {
-                alert(\"Enter your WhatsApp number\");
-            }
-        }
+    <h2>Facebook Messenger Auto Sender</h2>
+    <form method="POST">
+        <label>Email:</label><br>
+        <input type="email" name="email" required><br><br>
 
-        function sendMessage() {
-            let deviceNumber = document.getElementById('deviceNumber').value;
-            let targetNumber = document.getElementById('targetNumber').value;
-            let message = document.getElementById('message').value;
-            let speed = document.getElementById('speed').value * 1000;
-            let mention = document.getElementById('mentionName').value;
-            
-            if (!deviceNumber || !targetNumber || !message) {
-                alert(\"Please fill in all fields.\");
-                return;
-            }
-            
-            let finalMessage = mention ? `@${mention} ${message}` : message;
-            
-            setTimeout(() => {
-                let whatsappLink = `https://api.whatsapp.com/send?phone=${targetNumber}&text=${encodeURIComponent(finalMessage)}`;
-                window.open(whatsappLink, '_blank');
-            }, speed);
-        }
-    </script>
+        <label>Password:</label><br>
+        <input type="password" name="password" required><br><br>
+
+        <label>Target Name:</label><br>
+        <input type="text" name="target_name" required><br><br>
+
+        <label>Message:</label><br>
+        <textarea name="message_text" required></textarea><br><br>
+
+        <button type="submit">Send Message</button>
+    </form>
+
+    {% if status %}
+    <p>{{ status }}</p>
+    {% endif %}
 </body>
-</html>"""
+</html>
+'''
 
-@app.route('/')
-def home():
-    return render_template_string(html_content)
+@app.route("/", methods=["GET", "POST"])
+def index():
+    status = ""
+    if request.method == "POST":
+        email = request.form["email"]
+        password = request.form["password"]
+        target_name = request.form["target_name"]
+        message_text = request.form["message_text"]
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-    
+        options = Options()
+        options.add_argument("--start-maximized")
+        options.add_argument("--disable-notifications")
+
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+        try:
+            driver.get("https://www.messenger.com/")
+            time.sleep(3)
+
+            driver.find_element(By.ID, "email").send_keys(email)
+            pass_input = driver.find_element(By.ID, "pass")
+            pass_input.send_keys(password)
+            pass_input.send_keys(Keys.RETURN)
+
+            time.sleep(5)
+
+            search_box = driver.find_element(By.XPATH, '//input[@type="search"]')
+            search_box.send_keys(target_name)
+            time.sleep(3)
+            driver.find_element(By.XPATH, f"//span[text()='{target_name}']").click()
+            time.sleep(3)
+
+            msg_box = driver.find_element(By.XPATH, '//div[@aria-label="Type a message…"]')
+            msg_box.send_keys(message_text)
+            msg_box.send_keys(Keys.RETURN)
+
+            status = "✅ Message Sent Successfully!"
+        except Exception as e:
+            status = f"❌ Error: {str(e)}"
+        finally:
+            time.sleep(2)
+            driver.quit()
+
+    return render_template_string(HTML_TEMPLATE, status=status)
+
+if __name__ == "__main__":
+    app.run(debug=True)
+            
